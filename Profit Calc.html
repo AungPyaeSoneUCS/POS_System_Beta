@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>အမြတ်နှုန်းတွက်ချက်</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 50px;
+            background-image: url('1234.jpg'); /* 替换为你的背景图片路径 */
+            background-size: cover; /* 让图片覆盖整个背景 */
+            background-position: center; /* 居中显示背景图片 */
+            background-repeat: no-repeat; /* 不重复背景图片 */
+            color: #333; /* 设置字体颜色为白色，适配深色背景 */
+        }
+        .container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+        label {
+            font-weight: bold;
+            margin-top: 10px;
+            display: block;
+        }
+        input[type="number"] {
+            width: 90%;
+            padding: 8px;
+            margin-top: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #output {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>အမြတ်နုန်းတွက်ချက်</h2>
+
+        <label for="sellingPrice">ရောင်းစျေး : </label>
+        <input type="number" id="sellingPrice" placeholder="ရောင်းရငွေကိုရိုက်ထည့်ပါ" required>
+
+        <label for="profitMargin">အမြတ်နုန်း %：</label>
+        <input type="number" id="profitMargin" placeholder="အမြတ်နှုန်းကိုရိုက်ထည့်ပါ" required>
+
+        <button onclick="calculateProfit()">တွက်ချက်မည်</button>
+
+        <div id="output"></div>
+    </div>
+
+    <script>
+        function calculateProfit() {
+            const sellingPrice = parseFloat(document.getElementById('sellingPrice').value);
+            const profitMargin = parseFloat(document.getElementById('profitMargin').value);
+
+            if (isNaN(sellingPrice) || isNaN(profitMargin) || profitMargin < 0) {
+                document.getElementById('output').innerText = 'မှန်ကန်သောတန်ဖိုးကို ထည့်ပါ';
+                return;
+            }
+
+            const profit = (sellingPrice * (profitMargin / 100)).toFixed(2);
+            const costPrice = (sellingPrice - profit).toFixed(2);
+
+            document.getElementById('output').innerHTML = `
+                အမြတ်ငွေ ： ${profit}<br>
+                ၀ယ်ရင်းစျေး ： ${costPrice}
+            `;
+        }
+    </script>
+</body>
+</html>

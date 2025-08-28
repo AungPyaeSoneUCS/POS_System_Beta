@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS System - Cashier Page</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-cash-register"></i> Cashier Sale</h1>
+            <p>Quickly process cashier sales transactions</p>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                <i class="fas fa-shopping-bag"></i>
+                Sales Operation
+            </div>
+            
+            <div class="form-container">
+                <div class="form-group">
+                    <label for="barcode">Barcode</label>
+                    <input type="text" id="barcode" placeholder="Scan or enter product barcode">
+                </div>
+                <div class="form-group">
+                    <label for="quantity">Quantity</label>
+                    <input type="number" id="quantity" placeholder="Enter sales quantity" value="1">
+                </div>
+                <div class="form-group">
+                    <label for="product-info">Product Information</label>
+                    <input type="text" id="product-info" placeholder="Product information will be displayed here" readonly>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="tempPosSale()">
+                    <i class="fas fa-plus"></i>
+                    Add Product
+                </button>
+                <button class="btn btn-secondary" onclick="clearSaleForm()">
+                    <i class="fas fa-eraser"></i>
+                    Clear Form
+                </button>
+                <button class="btn btn-success" onclick="goToProductManagement()">
+                    <i class="fas fa-box"></i>
+                    Product Management
+                </button>
+            </div>
+        </div>
+
+        <!-- 临时销售记录 -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fas fa-receipt"></i>
+                Temporary Sales Record
+                <span style="font-size: 0.8rem; color: #f59e0b; margin-left: 10px;">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                </span>
+            </div>
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Barcode</th>
+                            <th>Product Name</th>
+                            <th>Quantity</th>
+                            <th>Price</th>
+                            <th>Total Price</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="temp_pos_table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 结算区域 -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fas fa-calculator"></i>
+                Settlement
+            </div>
+            
+            <div class="form-container">
+                <div class="form-group">
+                    <label for="received_amount">Received Amount</label>
+                    <input type="number" id="received_amount" placeholder="Enter received amount" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label for="change_amount">Change</label>
+                    <input type="text" id="change_amount" placeholder="Change amount" readonly>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="calculateChange()">
+                    <i class="fas fa-calculator"></i>
+                    Calculate Change
+                </button>
+                <button class="btn btn-success" onclick="completeSale()">
+                    <i class="fas fa-check"></i>
+                    Complete Sale
+                </button>
+                <button class="btn btn-secondary" onclick="previewReceipt()">
+                    <i class="fas fa-eye"></i>
+                                Preview Receipt
+                </button>
+                <button class="btn btn-info" onclick="printReceipt()">
+                    <i class="fas fa-print"></i>
+                    Print Receipt
+                </button>
+                <button class="btn btn-warning" onclick="clearTempSales()">
+                    <i class="fas fa-trash"></i>
+                    Clear Record
+                </button>
+            </div>
+        </div>
+
+        <!-- 销售统计 -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fas fa-chart-bar"></i>
+                Sales Statistics
+            </div>
+            
+            <div class="summary">
+                <p><strong>Total Items:</strong> <span id="total-items">0</span></p>
+                <p><strong>Total Amount:</strong> <span id="total_price">¥0</span></p>
+                <p><strong>Received Amount:</strong> <span id="display_received">¥0</span></p>
+                <p><strong>Change:</strong> <span id="change_display">¥0</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知容器 -->
+    <div id="notification-container"></div>
+
+    <script>
+        let products = [];
+        let tempSales = [];
+        
+        // API基础URL
+        const API_BASE = 'http://localhost:5000/api';
+        
+        // 页面加载时获取数据
+        window.addEventListener('load', function() {
+            loadProducts();
+            loadTempSales();
+            setupEventListeners();
+            
+            // 检查并清理过期的临时销售记录（超过24小时）
+            cleanupOldTempSales();
+        });
+        
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 条码输入框自动搜索产品
+            document.getElementById('barcode').addEventListener('input', function() {
+                searchProduct(this.value);
+            });
+            
+            // 回车键提交销售
+            document.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && e.target.id === 'barcode') {
+                    tempPosSale();
+                }
+            });
+            
+            // 实收金额变化时自动计算找零
+            document.getElementById('received_amount').addEventListener('input', function() {
+                calculateChange();
+            });
+        }
+        
+        // 显示通知
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('notification-container');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                ${message}
+            `;
+            
+            container.appendChild(notification);
+            
+            // 3秒后自动移除
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+        
+        // 搜索产品
+        function searchProduct(barcode) {
+            const product = products.find(p => p.barcode === barcode);
+            const productInfo = document.getElementById('product-info');
+            
+            if (product) {
+                productInfo.value = `${product.name} - Stock: ${product.quantity} - Price: $${product.selling_price}`;
+                productInfo.style.color = '#10b981';
+            } else {
+                productInfo.value = 'Product not found';
+                productInfo.style.color = '#ef4444';
+            }
+        }
+        
+        // 从API加载产品数据
+        async function loadProducts() {
+            try {
+                const response = await fetch(`${API_BASE}/products`);
+                const result = await response.json();
+                if (result.success) {
+                    products = result.data;
+                } else {
+                    showNotification('Failed to load products: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error loading products:', error);
+                showNotification('Error loading products, please check your network connection', 'error');
+            }
+        }
+        
+        // 从API加载临时销售数据
+        async function loadTempSales() {
+            try {
+                const response = await fetch(`${API_BASE}/temp-sales`);
+                const result = await response.json();
+                if (result.success) {
+                    tempSales = result.data;
+                    refreshTable();
+                    updateSummary();
+                    
+                    // 如果有临时销售记录，显示提醒
+                    if (tempSales.length > 0) {
+                        showNotification('Temporary sales record detected, these data will not be saved permanently', 'info');
+                    }
+                } else {
+                    showNotification('Failed to load temporary sales record: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error loading temporary sales record:', error);
+                showNotification('Error loading temporary sales record, please check your network connection', 'error');
+            }
+        }
+
+        // 临时销售操作
+        async function tempPosSale() {
+            const barcode = document.getElementById("barcode").value.trim();
+            const quantity = parseInt(document.getElementById("quantity").value);
+            const product = products.find(p => p.barcode === barcode);
+
+            if (!barcode) {
+                showNotification("Please enter product barcode", "error");
+                return;
+            }
+
+            if (!product) {
+                showNotification("Product not found", "error");
+                return;
+            }
+
+            if (product.quantity < quantity) {
+                showNotification("Stock is not enough", "error");
+                return;
+            }
+
+            if (quantity <= 0) {
+                showNotification("Sales quantity must be greater than 0", "error");
+                return;
+            }
+
+            try {
+                // 添加临时销售记录
+                const saleResponse = await fetch(`${API_BASE}/temp-sales`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        barcode: product.barcode,
+                        name: product.name,
+                        quantity: quantity,
+                        price: product.selling_price,
+                        total_price: product.selling_price * quantity
+                    })
+                });
+                
+                const saleResult = await saleResponse.json();
+                if (saleResult.success) {
+                    // 更新产品库存
+                    const updateResponse = await fetch(`${API_BASE}/products/update-quantity`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            barcode: product.barcode,
+                            quantity_change: -quantity
+                        })
+                    });
+                    
+                    const updateResult = await updateResponse.json();
+                    if (updateResult.success) {
+                        await loadProducts(); // 重新加载产品数据
+                        await loadTempSales(); // 重新加载临时销售数据
+                        clearSaleForm();
+                        showNotification("Product added successfully!");
+                    } else {
+                        showNotification("Failed to update stock: " + updateResult.error, "error");
+                    }
+                } else {
+                    showNotification("Failed to add product: " + saleResult.error, "error");
+                }
+            } catch (error) {
+                console.error('Error adding product:', error);
+                showNotification("Error adding product, please check your network connection", "error");
+            }
+        }
+
+        // 刷新表格
+        function refreshTable() {
+            const table = document.getElementById("temp_pos_table");
+            table.innerHTML = "";
+
+            if (tempSales.length === 0) {
+                table.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                            <i class="fas fa-shopping-cart" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+                            No temporary sales record
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tempSales.forEach((sale, index) => {
+                const row = `
+                    <tr>
+                        <td><strong>${sale.barcode}</strong></td>
+                        <td>${sale.name}</td>
+                        <td>${sale.quantity}</td>
+                        <td>$${sale.price.toFixed(2)}</td>
+                        <td>$${sale.total_price.toFixed(2)}</td>
+                        <td>${new Date(sale.date).toLocaleString()}</td>
+                    </tr>
+                `;
+                table.innerHTML += row;
+            });
+        }
+
+        // 更新统计信息
+        function updateSummary() {
+            const totalItems = tempSales.reduce((sum, sale) => sum + sale.quantity, 0);
+            const totalPrice = tempSales.reduce((sum, sale) => sum + sale.total_price, 0);
+            
+            document.getElementById('total-items').textContent = totalItems;
+            document.getElementById('total_price').textContent = `$${totalPrice.toFixed(2)}`;
+            
+            // 更新实收金额显示
+            const receivedAmount = parseFloat(document.getElementById('received_amount').value) || 0;
+            document.getElementById('display_received').textContent = `$${receivedAmount.toFixed(2)}`;
+            
+            // 计算找零
+            const change = receivedAmount - totalPrice;
+            document.getElementById('change_display').textContent = `$${change.toFixed(2)}`;
+        }
+
+        // 计算找零
+        function calculateChange() {
+            const totalPrice = tempSales.reduce((sum, sale) => sum + sale.total_price, 0);
+            const receivedAmount = parseFloat(document.getElementById('received_amount').value) || 0;
+            const change = receivedAmount - totalPrice;
+            
+            document.getElementById('change_amount').value = change >= 0 ? `$${change.toFixed(2)}` : 'Insufficient amount';
+            document.getElementById('change_amount').style.color = change >= 0 ? '#10b981' : '#ef4444';
+            
+            updateSummary();
+        }
+
+        // 完成销售
+        async function completeSale() {
+            const totalPrice = tempSales.reduce((sum, sale) => sum + sale.total_price, 0);
+            const receivedAmount = parseFloat(document.getElementById('received_amount').value) || 0;
+            
+            if (receivedAmount < totalPrice) {
+                showNotification("Received amount is not enough", "error");
+                return;
+            }
+            
+            if (tempSales.length === 0) {
+                showNotification("No products to settle", "warning");
+                return;
+            }
+            
+            try {
+                // 将临时销售转换为正式销售
+                for (const sale of tempSales) {
+                    const saleResponse = await fetch(`${API_BASE}/sales`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            barcode: sale.barcode,
+                            name: sale.name,
+                            quantity: sale.quantity,
+                            price: sale.price,
+                            total_price: sale.total_price,
+                            cost_price: products.find(p => p.barcode === sale.barcode)?.cost_price || 0
+                        })
+                    });
+                    
+                    if (!saleResponse.ok) {
+                        throw new Error('Failed to save sales record');
+                    }
+                }
+                
+                // 清空临时销售记录
+                await fetch(`${API_BASE}/temp-sales/clear`, {
+                    method: 'POST'
+                });
+                
+                // 重新加载数据
+                await loadTempSales();
+                clearSaleForm();
+                document.getElementById('received_amount').value = '';
+                document.getElementById('change_amount').value = '';
+                
+                showNotification("Sale completed!", "success");
+                
+            } catch (error) {
+                console.error('Error completing sale:', error);
+                showNotification("Error completing sale, please try again", "error");
+            }
+        }
+
+        // 清空临时销售记录
+        async function clearTempSales() {
+            if (tempSales.length === 0) {
+                showNotification("No temporary sales record", "warning");
+                return;
+            }
+            
+            if (!confirm("Are you sure you want to clear all temporary sales records? This action cannot be undone.")) {
+                return;
+            }
+            
+            try {
+                // 恢复库存
+                for (const sale of tempSales) {
+                    await fetch(`${API_BASE}/products/update-quantity`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            barcode: sale.barcode,
+                            quantity_change: sale.quantity
+                        })
+                    });
+                }
+                
+                // 清空临时销售记录
+                await fetch(`${API_BASE}/temp-sales/clear`, {
+                    method: 'POST'
+                });
+                
+                await loadProducts();
+                await loadTempSales();
+                clearSaleForm();
+                
+                showNotification("Temporary sales record cleared", "success");
+                
+            } catch (error) {
+                console.error('Error clearing temporary sales record:', error);
+            showNotification("Failed to clear temporary sales record, please try again", "error");
+            }
+        }
+
+        // 打印小票
+        function printReceipt() {
+            if (tempSales.length === 0) {
+                showNotification("No products to print", "warning");
+                return;
+            }
+            
+            const totalPrice = tempSales.reduce((sum, sale) => sum + sale.total_price, 0);
+            const receivedAmount = parseFloat(document.getElementById('received_amount').value) || 0;
+            const change = receivedAmount - totalPrice;
+
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Cashier Receipt</title>
+                        <style>
+                            @media print {
+                                body { margin: 0; padding: 10px; }
+                                .no-print { display: none; }
+                            }
+                            body { 
+                                font-family: 'Inter', sans-serif; 
+                                padding: 20px; 
+                                margin: 0;
+                                font-size: 12px;
+                            }
+                            .receipt-header {
+                                text-align: center;
+                                margin-bottom: 20px;
+                                border-bottom: 2px solid #000;
+                                padding-bottom: 10px;
+                            }
+                            .receipt-title {
+                                font-size: 18px;
+                                font-weight: bold;
+                                margin-bottom: 5px;
+                            }
+                            .receipt-date {
+                                font-size: 12px;
+                                color: #666;
+                            }
+                            table { 
+                                width: 100%; 
+                                border-collapse: collapse; 
+                                margin: 15px 0;
+                                font-size: 11px;
+                            }
+                            th, td { 
+                                border: 1px solid #000; 
+                                padding: 6px 4px; 
+                                text-align: left; 
+                            }
+                            th { 
+                                background-color: #f0f0f0; 
+                                font-weight: bold;
+                            }
+                            .total-row { 
+                                font-weight: bold; 
+                                background-color: #f0f0f0;
+                            }
+                            .change-row { 
+                                font-weight: bold; 
+                            }
+                            .receipt-footer {
+                                text-align: center;
+                                margin-top: 20px;
+                                padding-top: 10px;
+                                border-top: 1px solid #000;
+                                font-size: 12px;
+                            }
+                            .print-btn {
+                                background: #007bff;
+                                color: white;
+                                border: none;
+                                padding: 8px 16px;
+                                border-radius: 4px;
+                                cursor: pointer;
+                                margin-top: 15px;
+                                font-size: 12px;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="receipt-header">
+                            <div class="receipt-title">Cashier Receipt</div>
+                            <div class="receipt-date">Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</div>
+                        </div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Product Name</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th>Total Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${tempSales.map(sale => `
+                                    <tr>
+                                        <td>${sale.name}</td>
+                                        <td>${sale.quantity}</td>
+                                        <td>$${sale.price.toFixed(2)}</td>
+                                        <td>$${sale.total_price.toFixed(2)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                            <tfoot>
+                                <tr class="total-row">
+                                    <td colspan="3">Total Amount:</td>
+                                    <td>$${totalPrice.toFixed(2)}</td>
+                                </tr>
+                                <tr class="change-row">
+                                    <td colspan="3">Received Amount:</td>
+                                    <td>$${receivedAmount.toFixed(2)}</td>
+                                </tr>
+                                <tr class="change-row">
+                                    <td colspan="3">Change:</td>
+                                    <td>$${change.toFixed(2)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                        <div class="receipt-footer">
+                            Thank you for your business!
+                        </div>
+                        <div class="no-print" style="text-align: center;">
+                            <button class="print-btn" onclick="window.print()">
+                                <i class="fas fa-print"></i> Print Receipt
+                            </button>
+                        </div>
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
+            printWindow.close();
+        }
+
+        // 打印预览小票
+        function previewReceipt() {
+            if (tempSales.length === 0) {
+                showNotification("No products to preview", "warning");
+                return;
+            }
+            
+            const totalPrice = tempSales.reduce((sum, sale) => sum + sale.total_price, 0);
+            const receivedAmount = parseFloat(document.getElementById('received_amount').value) || 0;
+            const change = receivedAmount - totalPrice;
+
+            const previewWindow = window.open('', '_blank', 'width=600,height=800');
+            previewWindow.document.write(`
+                <html>
+                    <head>
+                            <title>Cashier Receipt Preview</title>
+                        <style>
+                            body { 
+                                font-family: 'Inter', sans-serif; 
+                                padding: 20px; 
+                                margin: 0;
+                                background-color: #f8f9fa;
+                            }
+                            .receipt-container {
+                                background: white;
+                                padding: 30px;
+                                border-radius: 10px;
+                                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                                max-width: 500px;
+                                margin: 0 auto;
+                            }
+                            h1 { 
+                                text-align: center; 
+                                color: #333; 
+                                margin-bottom: 20px;
+                                border-bottom: 2px solid #007bff;
+                                padding-bottom: 10px;
+                            }
+                            .receipt-info {
+                                text-align: center;
+                                margin-bottom: 20px;
+                                color: #666;
+                            }
+                            table { 
+                                width: 100%; 
+                                border-collapse: collapse; 
+                                margin-top: 20px; 
+                                margin-bottom: 20px;
+                            }
+                            th, td { 
+                                border: 1px solid #ddd; 
+                                padding: 12px 8px; 
+                                text-align: left; 
+                            }
+                            th { 
+                                background-color: #f8f9fa; 
+                                font-weight: 600;
+                            }
+                            .total-row { 
+                                font-weight: bold; 
+                                background-color: #f8f9fa;
+                            }
+                            .change-row { 
+                                font-weight: bold; 
+                                color: #10b981; 
+                                background-color: #f0fdf4;
+                            }
+                            .footer {
+                                text-align: center;
+                                margin-top: 20px;
+                                padding-top: 20px;
+                                border-top: 1px solid #ddd;
+                                color: #666;
+                            }
+                            .print-btn {
+                                background: #007bff;
+                                color: white;
+                                border: none;
+                                padding: 10px 20px;
+                                border-radius: 5px;
+                                cursor: pointer;
+                                margin-top: 20px;
+                                font-size: 14px;
+                            }
+                            .print-btn:hover {
+                                background: #0056b3;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="receipt-container">
+                            <h1>Cashier Receipt</h1>
+                            <div class="receipt-info">
+                                Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}
+                            </div>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Product Name</th>
+                                        <th>Quantity</th>
+                                        <th>Price</th>
+                                        <th>Total Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${tempSales.map(sale => `
+                                        <tr>
+                                            <td>${sale.name}</td>
+                                            <td>${sale.quantity}</td>
+                                            <td>$${sale.price.toFixed(2)}</td>
+                                            <td>$${sale.total_price.toFixed(2)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                                <tfoot>
+                                    <tr class="total-row">
+                                        <td colspan="3">Total Amount:</td>
+                                        <td>$${totalPrice.toFixed(2)}</td>
+                                    </tr>
+                                    <tr class="change-row">
+                                        <td colspan="3">Received Amount:</td>
+                                        <td>$${receivedAmount.toFixed(2)}</td>
+                                    </tr>
+                                    <tr class="change-row">
+                                        <td colspan="3">Change:</td>
+                                        <td>$${change.toFixed(2)}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                            <div class="footer">
+                                Thank you for your business!
+                            </div>
+                            <div style="text-align: center;">
+                                <button class="print-btn" onclick="window.print()">
+                                    <i class="fas fa-print"></i> Print Receipt
+                                </button>
+                            </div>
+                        </div>
+                    </body>
+                </html>
+            `);
+            previewWindow.document.close();
+        }
+
+        // 清空销售表单
+        function clearSaleForm() {
+            document.getElementById("barcode").value = "";
+            document.getElementById("quantity").value = "1";
+            document.getElementById("product-info").value = "";
+            document.getElementById("product-info").style.color = '';
+        }
+
+        // 清理过期的临时销售记录
+        async function cleanupOldTempSales() {
+            try {
+                // 清理超过24小时的临时销售记录
+                const response = await fetch(`${API_BASE}/temp-sales/cleanup`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && result.cleaned_count > 0) {
+                        console.log(` ${result.cleaned_count} `);
+                        await loadTempSales(); // 重新加载数据
+                    }
+                }
+            } catch (error) {
+                console.error(':', error);
+            }
+        }
+
+        // 导航功能
+        function goToProductManagement() {
+            window.location.href = "/";
+        }
+    </script>
+</body>
+</html>

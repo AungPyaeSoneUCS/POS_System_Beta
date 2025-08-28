@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS System - Product Management</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1><i class="fas fa-store"></i> POS System</h1>
+            <p>Professional product management and inventory control system</p>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="total-products">0</div>
+                <div class="stat-label">Total Products</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-value">$0</div>
+                <div class="stat-label">Total Inventory Value</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="low-stock-count">0</div>
+                <div class="stat-label">Low Stock Products</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avg-profit">0%</div>
+                <div class="stat-label">Average Profit Margin</div>
+            </div>
+        </div>
+
+        <!-- 产品管理卡片 -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fas fa-box"></i>
+                Product Management
+            </div>
+            
+            <!-- 产品表单 -->
+            <div class="form-container">
+                <div class="form-group">
+                    <label for="barcode">Barcode</label>
+                    <input type="text" id="barcode" placeholder="Enter product barcode">
+                </div>
+                <div class="form-group">
+                    <label for="name">Product Name</label>
+                    <input type="text" id="name" placeholder="Enter product name">
+                </div>
+                <div class="form-group">
+                    <label for="category">Category</label>
+                    <select id="category">
+                        <option value="">Select Category</option>
+                        <option value="Food">Food</option>
+                        <option value="Drinks">Drinks</option>
+                        <option value="Daily Necessities">Daily Necessities</option>
+                        <option value="Electronics">Electronics</option>
+                        <option value="Clothing">Clothing</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="quantity">Stock Quantity</label>
+                    <input type="number" id="quantity" placeholder="Enter stock quantity">
+                </div>
+                <div class="form-group">
+                    <label for="cost_price">Cost Price</label>
+                    <input type="number" id="cost_price" step="0.01" placeholder="Enter cost price">
+                </div>
+                <div class="form-group">
+                    <label for="selling_price">Selling Price</label>
+                    <input type="number" id="selling_price" step="0.01" placeholder="Enter selling price">
+                </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="addProduct()">
+                    <i class="fas fa-plus"></i>
+                    Add Product
+                </button>
+                <button class="btn btn-warning" onclick="modifyProduct()">
+                    <i class="fas fa-edit"></i>
+                    Modify Product
+                </button>
+                <button class="btn btn-danger" onclick="deleteProduct()">
+                    <i class="fas fa-trash"></i>
+                    Delete Product
+                </button>
+                <button class="btn btn-secondary" onclick="clearInputs()">
+                    <i class="fas fa-eraser"></i>
+                    Clear Form
+                </button>
+            </div>
+        </div>
+
+        <!-- 搜索和过滤 -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fas fa-search"></i>
+                Search and Filter
+            </div>
+            
+            <div class="search-container">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search product name or barcode...">
+                </div>
+                <select id="categoryFilter" class="form-group">
+                    <option value="">All Categories</option>
+                    <option value="Food">Food</option>
+                    <option value="Drinks">Drinks</option>
+                    <option value="Daily Necessities">Daily Necessities</option>
+                    <option value="Electronics">Electronics</option>
+                    <option value="Clothing">Clothing</option>
+                    <option value="Other">Other</option>
+                </select>
+                <button class="btn btn-primary" onclick="filterProducts()">
+                    <i class="fas fa-filter"></i>
+                    Filter
+                </button>
+                <button class="btn btn-secondary" onclick="resetFilter()">
+                    <i class="fas fa-undo"></i>
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <!-- 产品列表 -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fas fa-list"></i>
+                Product List
+            </div>
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>No.</th>
+                            <th>Barcode</th>
+                            <th>Product Name</th>
+                            <th>Category</th>
+                            <th>Stock Quantity</th>
+                            <th>Cost Price</th>
+                            <th>Selling Price</th>
+                            <th>Profit Margin</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="product_table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 数据管理 -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fas fa-database"></i>
+                Data Management
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn btn-success" onclick="backupData()">
+                    <i class="fas fa-download"></i>
+                    Backup Data
+                </button>
+                <button class="btn btn-warning" onclick="restoreData()">
+                    <i class="fas fa-upload"></i>
+                    Restore Data
+                </button>
+                <button class="btn btn-primary" onclick="goToTempPOS()">
+                    <i class="fas fa-cash-register"></i>
+                    Cashier Sales
+                </button>
+                <button class="btn btn-secondary" onclick="goToPOS()">
+                    <i class="fas fa-shopping-cart"></i>
+                    Sales Management
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 隐藏的文件输入 -->
+    <input type="file" id="restoreFileInput" style="display:none" onchange="handleFileSelect(event)">
+
+    <!-- 通知容器 -->
+    <div id="notification-container"></div>
+
+    <script>
+        let products = [];
+        let selectedRowId = null;
+        let filteredProducts = [];
+
+        const lowStockThreshold = 10; // 低库存阈值
+        
+        // API基础URL
+        const API_BASE = 'http://localhost:5000/api';
+        
+        // 页面加载时获取产品数据
+        window.addEventListener('load', function() {
+            loadProducts();
+            setupEventListeners();
+        });
+        
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 搜索框实时搜索
+            document.getElementById('searchInput').addEventListener('input', function() {
+                filterProducts();
+            });
+            
+            // 类别过滤
+            document.getElementById('categoryFilter').addEventListener('change', function() {
+                filterProducts();
+            });
+            
+            // 回车键提交表单
+            document.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+                    addProduct();
+                }
+            });
+        }
+        
+        // 显示通知
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('notification-container');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                ${message}
+            `;
+            
+            container.appendChild(notification);
+            
+            // 3秒后自动移除
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+        
+        // 从API加载产品数据
+        async function loadProducts() {
+            try {
+                showNotification('Loading product data...', 'info');
+                const response = await fetch(`${API_BASE}/products`);
+                const result = await response.json();
+                if (result.success) {
+                    products = result.data;
+                    filteredProducts = [...products];
+                    refreshTable();
+                    updateStats();
+                    showNotification('Product data loaded successfully');
+                } else {
+                    showNotification('Failed to load product: ' + result.error, 'error');
+                }
+            } catch (error) {
+            console.error('Error loading product:', error);
+                showNotification('Error loading product, please check your network connection', 'error');
+            }
+        }
+
+        // 更新统计信息
+        function updateStats() {
+            const totalProducts = products.length;
+            const lowStockCount = products.filter(p => p.quantity <= lowStockThreshold).length;
+            
+            let totalValue = 0;
+            let totalProfit = 0;
+            let totalSellingValue = 0;
+            
+            products.forEach(product => {
+                totalValue += product.cost_price * product.quantity;
+                totalProfit += (product.selling_price - product.cost_price) * product.quantity;
+                totalSellingValue += product.selling_price * product.quantity;
+            });
+            
+            const avgProfit = totalSellingValue > 0 ? (totalProfit / totalSellingValue) * 100 : 0;
+            
+            document.getElementById('total-products').textContent = totalProducts;
+            document.getElementById('total-value').textContent = `$${totalValue.toFixed(2)}`;
+            document.getElementById('low-stock-count').textContent = lowStockCount;
+            document.getElementById('avg-profit').textContent = `${avgProfit.toFixed(1)}%`;
+        }
+        
+        function refreshTable() {
+            const table = document.getElementById("product_table");
+            table.innerHTML = "";
+
+            if (filteredProducts.length === 0) {
+                table.innerHTML = `
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                            <i class="fas fa-search" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+                            No matching products found
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            filteredProducts.forEach((product, index) => {
+                const isLowStock = product.quantity <= lowStockThreshold;
+                const isSelected = selectedRowId === index;
+                
+                let statusBadge = '';
+                if (isLowStock) {
+                    statusBadge = '<span class="status-badge status-warning">Low Stock</span>';
+                } else if (product.quantity === 0) {
+                    statusBadge = '<span class="status-badge status-danger">Out of Stock</span>';
+                } else {
+                    statusBadge = '<span class="status-badge status-success">In Stock</span>';
+                }
+
+                const row = `
+                    <tr onclick="selectRow(${index})" class="${isSelected ? 'selected' : ''} ${isLowStock ? 'low-stock' : ''}" style="cursor: pointer;">
+                        <td>${index + 1}</td>
+                        <td><strong>${product.barcode}</strong></td>
+                        <td>${product.name}</td>
+                        <td>${product.category}</td>
+                        <td>${product.quantity}</td>
+                        <td>$${product.cost_price.toFixed(2)}</td>
+                        <td>$${product.selling_price.toFixed(2)}</td>
+                        <td>${product.profit_margin.toFixed(1)}%</td>
+                        <td>${statusBadge}</td>
+                    </tr>
+                `;
+                table.innerHTML += row;
+            });
+        }
+
+        // 搜索和过滤功能
+        function filterProducts() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const categoryFilter = document.getElementById('categoryFilter').value;
+            
+            filteredProducts = products.filter(product => {
+                const matchesSearch = product.name.toLowerCase().includes(searchTerm) || 
+                                    product.barcode.toLowerCase().includes(searchTerm);
+                const matchesCategory = !categoryFilter || product.category === categoryFilter;
+                
+                return matchesSearch && matchesCategory;
+            });
+            
+            refreshTable();
+        }
+        
+        // 重置过滤
+        function resetFilter() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('categoryFilter').value = '';
+            filteredProducts = [...products];
+            refreshTable();
+        }
+        
+        // 选择某一行商品
+        function selectRow(index) {
+            selectedRowId = index;
+            const product = filteredProducts[selectedRowId];
+            // 将商品数据加载到输入框
+            document.getElementById("barcode").value = product.barcode;
+            document.getElementById("name").value = product.name;
+            document.getElementById("category").value = product.category;
+            document.getElementById("cost_price").value = product.cost_price;
+            document.getElementById("selling_price").value = product.selling_price;
+            document.getElementById("quantity").value = product.quantity;
+            refreshTable();  // 刷新表格
+        }
+
+        // 添加商品
+        async function addProduct() {
+            const barcode = document.getElementById("barcode").value.trim();
+            const name = document.getElementById("name").value.trim();
+            const category = document.getElementById("category").value;
+            const cost_price = parseFloat(document.getElementById("cost_price").value);
+            const selling_price = parseFloat(document.getElementById("selling_price").value);
+            const quantity = parseInt(document.getElementById("quantity").value);
+
+            if (!barcode || !name || !category || isNaN(cost_price) || isNaN(selling_price) || isNaN(quantity)) {
+                showNotification("Please fill in all required fields", "error");
+                return;
+            }
+
+            if (cost_price > selling_price) {
+                showNotification("Cost price cannot be higher than selling price", "error");
+                return;
+            } 
+
+            if (quantity < 0) {
+                showNotification("Stock quantity cannot be negative", "error");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/products`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        barcode, name, category, quantity, cost_price, selling_price
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    await loadProducts(); // 重新加载产品数据
+                    clearInputs();
+                    showNotification("Product added successfully!");
+                } else {
+                    showNotification("Add failed: " + result.error, "error");
+                }
+            } catch (error) {
+                console.error('Error adding product:', error);
+                showNotification("Error adding product, please check your network connection", "error");
+            }
+        }
+
+        // 清空输入框
+        function clearInputs() {
+            document.getElementById("barcode").value = "";
+            document.getElementById("name").value = "";
+            document.getElementById("category").value = "";
+            document.getElementById("quantity").value = "";
+            document.getElementById("cost_price").value = "";
+            document.getElementById("selling_price").value = "";
+            selectedRowId = null;
+            showNotification("Form cleared");
+        }
+        
+        // 导航功能
+        function goToTempPOS() {
+            window.location.href = "/temp_pos.html";
+        }
+        
+        function goToPOS() {
+            window.location.href = "/pos.html";
+        }
+
+        // 修改商品
+        async function modifyProduct() {
+            if (selectedRowId === null) {
+                showNotification("Please select the product to modify", "error");
+                return;
+            }
+
+            const barcode = document.getElementById("barcode").value.trim();
+            const name = document.getElementById("name").value.trim();
+            const category = document.getElementById("category").value;
+            const cost_price = parseFloat(document.getElementById("cost_price").value);
+            const selling_price = parseFloat(document.getElementById("selling_price").value);
+            const quantity = parseInt(document.getElementById("quantity").value);
+
+            if (!barcode || !name || !category || isNaN(cost_price) || isNaN(selling_price) || isNaN(quantity)) {
+                showNotification("Please fill in all required fields", "error");
+                return;
+            }
+
+            if (cost_price > selling_price) {
+                    showNotification("Cost price cannot be higher than selling price", "error");
+                return;
+            }
+
+            try {
+                const productId = filteredProducts[selectedRowId].id;
+                const response = await fetch(`${API_BASE}/products/${productId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        barcode, name, category, quantity, cost_price, selling_price
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    await loadProducts(); // 重新加载产品数据
+                    clearInputs();
+                    showNotification("Product modified successfully!");
+                } else {
+                    showNotification("Modify failed: " + result.error, "error");
+                }
+            } catch (error) {
+                console.error('Error modifying product:', error);
+                showNotification("Error modifying product, please check your network connection", "error");
+            }
+        }
+
+        // 删除商品
+        async function deleteProduct() {
+            if (selectedRowId === null) {
+                showNotification("Please select the product to delete", "error");
+                return;
+            }
+
+            if (!confirm("Are you sure you want to delete this product? This action cannot be undone.")) {
+                return;
+            }
+
+            try {
+                const productId = filteredProducts[selectedRowId].id;
+                const response = await fetch(`${API_BASE}/products/${productId}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    await loadProducts(); // 重新加载产品数据
+                    clearInputs();
+                    showNotification("Product deleted successfully!");
+                } else {
+                    showNotification("Delete failed: " + result.error, "error");
+                }
+            } catch (error) {
+                console.error('Error deleting product:', error);
+                showNotification("Error deleting product, please check your network connection", "error");
+            }
+        }
+
+        // 备份数据记录
+        async function backupData() {
+            try {
+                showNotification("Backing up data...", "info");
+                const response = await fetch(`${API_BASE}/products`);
+                const result = await response.json();
+                
+                if (result.success && result.data.length > 0) {
+                    const data = JSON.stringify(result.data, null, 2);
+                    const blob = new Blob([data], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `products_backup_${new Date().toISOString().split('T')[0]}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showNotification("Data backup successful!");
+                } else {
+                    showNotification("No data to backup!", "warning");
+                }
+            } catch (error) {
+                console.error('Error backing up data:', error);
+                showNotification("Error backing up data, please check your network connection", "error");
+            }
+        }
+
+        // 还原数据记录
+        function restoreData() {
+            document.getElementById("restoreFileInput").click();
+        }
+        
+        // 处理文件选择
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        showNotification("File read successfully, please use the migration tool to import data", "info");
+                    } catch (error) {
+                        showNotification("File format error, please select a valid JSON file", "error");
+                    }
+                };
+                reader.readAsText(file);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS System - Sales Management</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1><i class="fas fa-shopping-cart"></i> Sales Management</h1>
+            <p>Quickly process sales transactions and inventory management</p>
+        </div>
+
+        <!-- 销售统计 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="total-sales">¥0</div>
+                <div class="stat-label">Today's Sales</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-profit">¥0</div>
+                <div class="stat-label">Today's Profit</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-transactions">0</div>
+                <div class="stat-label">Transaction Count</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avg-profit-margin">0%</div>
+                <div class="stat-label">Average Profit Margin</div>
+            </div>
+        </div>
+
+        <!-- 销售操作 -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fas fa-cash-register"></i>
+                Sales Operation
+            </div>
+            
+            <div class="form-container">
+                <div class="form-group">
+                    <label for="barcode">Barcode</label>
+                    <input type="text" id="barcode" placeholder="Scan or enter product barcode">
+                </div>
+                <div class="form-group">
+                    <label for="quantity">Quantity</label>
+                    <input type="number" id="quantity" placeholder="Enter sales quantity" value="1">
+                </div>
+                <div class="form-group">
+                    <label for="product-info">Product Information</label>
+                    <input type="text" id="product-info" placeholder="Product information will be displayed here" readonly>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="posSale()">
+                    <i class="fas fa-plus"></i>
+                Add Sale
+                </button>
+                <button class="btn btn-secondary" onclick="clearSaleForm()">
+                    <i class="fas fa-eraser"></i>
+                    Clear Form
+                </button>
+                <button class="btn btn-success" onclick="goToProductManagement()">
+                    <i class="fas fa-box"></i>
+                    Product Management
+                </button>
+            </div>
+        </div>
+
+        <!-- 销售记录 -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fas fa-list"></i>
+                Sales Record
+            </div>
+            
+            <div class="table-container">
+                <div id="table-debug" style="background: #f0f0f0; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc;">
+                    <strong>Debug information:</strong> <span id="debug-info">Loading...</span>
+                </div>
+                <table style="border: 2px solid #333;">
+                    <thead>
+                        <tr>
+                            <th>Barcode</th>
+                            <th>Product Name</th>
+                            <th>Quantity</th>
+                            <th>Price</th>
+                            <th>Total Price</th>
+                            <th>Date</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pos_table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 销售统计 -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fas fa-chart-bar"></i>
+                Sales Statistics
+            </div>
+            
+            <div class="summary">
+                <p><strong>Total Sales:</strong> <span id="total_price">¥0</span></p>
+                <p><strong>Total Profit:</strong> <span id="total_profit">¥0</span></p>
+                <p><strong>Average Profit Margin:</strong> <span id="average_profit_margin">0%</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知容器 -->
+    <div id="notification-container"></div>
+
+    <script>
+        let products = [];
+        let sales = [];
+        
+        // API基础URL
+        const API_BASE = 'http://localhost:5000/api';
+        
+        // 页面加载时获取数据
+        window.addEventListener('load', function() {
+            console.log('Page loaded, starting initialization...');
+            loadProducts().then(() => {
+                console.log('Product data loaded');
+                return loadSales();
+            }).then(() => {
+                console.log('Sales data loaded');
+                setupEventListeners();
+            }).catch(error => {
+                console.error('Initialization failed:', error);
+            });
+        });
+        
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 条码输入框自动搜索产品
+            document.getElementById('barcode').addEventListener('input', function() {
+                searchProduct(this.value);
+            });
+            
+            // 回车键提交销售
+            document.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && e.target.id === 'barcode') {
+                    posSale();
+                }
+            });
+        }
+        
+        // 显示通知
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('notification-container');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                ${message}
+            `;
+            
+            container.appendChild(notification);
+            
+            // 3秒后自动移除
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+        
+        // 搜索产品
+        function searchProduct(barcode) {
+            const product = products.find(p => p.barcode === barcode);
+            const productInfo = document.getElementById('product-info');
+            
+            if (product) {
+                productInfo.value = `${product.name} - Stock: ${product.quantity} - Price: $${product.selling_price}`;
+                productInfo.style.color = '#10b981';
+            } else {
+                productInfo.value = 'Product not found';
+                productInfo.style.color = '#ef4444';
+            }
+        }
+        
+        // 从API加载产品数据
+        async function loadProducts() {
+            try {
+                console.log('Loading products...');
+                const response = await fetch(`${API_BASE}/products`);
+                const result = await response.json();
+                console.log('Products API response:', result);
+                if (result.success) {
+                    products = result.data;
+                    console.log('Products loaded:', products);
+                } else {
+                    console.error('Failed to load products:', result.error);
+                    showNotification('Failed to load product: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error loading product:', error);
+                showNotification('Error loading product, please check your network connection', 'error');
+            }
+        }
+        
+        // 从API加载销售数据
+        async function loadSales() {
+            try {
+                console.log('Loading sales data...');
+                const response = await fetch(`${API_BASE}/sales`);
+                const result = await response.json();
+                console.log('Sales API response:', result);
+                if (result.success) {
+                    sales = result.data;
+                    console.log('Sales data loaded:', sales);
+                    refreshTable();
+                    updateStats();
+                } else {
+                    console.error('Failed to load sales:', result.error);
+                    showNotification('Failed to load sales record: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error loading sales record:', error);
+                showNotification('Error loading sales record, please check your network connection', 'error');
+            }
+        }
+
+        // 销售操作
+        async function posSale() {
+            const barcode = document.getElementById("barcode").value.trim();
+            const quantity = parseInt(document.getElementById("quantity").value);
+            const product = products.find(p => p.barcode === barcode);
+
+            if (!barcode) {
+                showNotification("Please enter product barcode", "error");
+                return;
+            }
+
+            if (!product) {
+                showNotification("Product not found", "error");
+                return;
+            }
+
+            if (product.quantity < quantity) {
+                showNotification("Stock is not enough", "error");
+                return;
+            }
+
+            if (quantity <= 0) {
+                showNotification("Sales quantity must be greater than 0", "error");
+                return;
+            }
+
+            try {
+                // 添加销售记录
+                const saleResponse = await fetch(`${API_BASE}/sales`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        barcode: product.barcode,
+                        name: product.name,
+                        quantity: quantity,
+                        price: product.selling_price,
+                        total_price: product.selling_price * quantity,
+                        cost_price: product.cost_price
+                    })
+                });
+                
+                const saleResult = await saleResponse.json();
+                if (saleResult.success) {
+                    // 更新产品库存
+                    const updateResponse = await fetch(`${API_BASE}/products/update-quantity`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            barcode: product.barcode,
+                            quantity_change: -quantity
+                        })
+                    });
+                    
+                    const updateResult = await updateResponse.json();
+                    if (updateResult.success) {
+                        await loadProducts(); // 重新加载产品数据
+                        await loadSales(); // 重新加载销售数据
+                        clearSaleForm();
+                        showNotification("Sales successful!");
+                    } else {
+                        showNotification("Failed to update stock: " + updateResult.error, "error");
+                    }
+                } else {
+                    showNotification("Sales failed: " + saleResult.error, "error");
+                }
+            } catch (error) {
+                console.error('Error selling:', error);
+                showNotification("Error selling, please check your network connection", "error");
+            }
+        }
+
+        // 刷新销售表格
+        function refreshTable() {
+            console.log('Refreshing table with sales:', sales);
+            const debugInfo = document.getElementById('debug-info');
+            const table = document.getElementById("pos_table");
+            
+            debugInfo.textContent = `Sales record number: ${sales.length}`;
+            table.innerHTML = "";
+
+            if (sales.length === 0) {
+                console.log('No sales records to display');
+                table.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                            <i class="fas fa-receipt" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+                            No sales record
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            let totalSales = 0;
+            let totalProfit = 0;
+            let totalProfitMargin = 0;
+            let totalQuantity = 0;
+
+            sales.forEach((sale, index) => {
+                const profit = (sale.price - sale.cost_price) * sale.quantity;
+                const profitMargin = ((sale.price - sale.cost_price) / sale.price) * 100;
+
+                totalSales += sale.total_price;
+                totalProfit += profit;
+                totalProfitMargin += profitMargin * sale.quantity;
+                totalQuantity += sale.quantity;
+
+                const row = `
+                    <tr>
+                        <td><strong>${sale.barcode}</strong></td>
+                        <td>${sale.name}</td>
+                        <td>${sale.quantity}</td>
+                        <td>$${sale.price.toFixed(2)}</td>
+                        <td>$${sale.total_price.toFixed(2)}</td>
+                        <td>${new Date(sale.date).toLocaleString()}</td>
+                        <td>
+                            <button class="btn btn-warning" onclick="modifySale(${index})" style="padding: 4px 8px; font-size: 0.8rem;">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-danger" onclick="deleteSale(${index})" style="padding: 4px 8px; font-size: 0.8rem;">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                table.innerHTML += row;
+            });
+
+            // 更新总价、总利润、平均利润率显示
+            const averageProfitMargin = totalQuantity > 0 ? (totalProfitMargin / totalQuantity).toFixed(2) : 0;
+            document.getElementById("total_price").textContent = `$${totalSales.toFixed(2)}`;
+            document.getElementById("total_profit").textContent = `$${totalProfit.toFixed(2)}`;
+            document.getElementById("average_profit_margin").textContent = `${averageProfitMargin}%`;
+        }
+
+        // 更新统计信息
+        function updateStats() {
+            const today = new Date().toDateString();
+            const todaySales = sales.filter(sale => new Date(sale.date).toDateString() === today);
+            
+            const totalSales = todaySales.reduce((sum, sale) => sum + sale.total_price, 0);
+            const totalProfit = todaySales.reduce((sum, sale) => sum + (sale.price - sale.cost_price) * sale.quantity, 0);
+            const totalTransactions = todaySales.length;
+            const avgProfitMargin = totalSales > 0 ? (totalProfit / totalSales) * 100 : 0;
+            
+            document.getElementById('total-sales').textContent = `$${totalSales.toFixed(2)}`;
+            document.getElementById('total-profit').textContent = `$${totalProfit.toFixed(2)}`;
+            document.getElementById('total-transactions').textContent = totalTransactions;
+            document.getElementById('avg-profit-margin').textContent = `${avgProfitMargin.toFixed(1)}%`;
+        }
+
+        // 清空销售表单
+        function clearSaleForm() {
+            document.getElementById("barcode").value = "";
+            document.getElementById("quantity").value = "1";
+            document.getElementById("product-info").value = "";
+            document.getElementById("product-info").style.color = '';
+        }
+
+        // 导航功能
+        function goToProductManagement() {
+            window.location.href = "/";
+        }
+
+        // 修改销售记录（简化版）
+        function modifySale(index) {
+            showNotification("Modification function under development...", "info");
+        }
+
+        // 删除销售记录
+        async function deleteSale(index) {
+            const sale = sales[index];
+            if (!sale) {
+                showNotification("", "error");
+                return;
+            }
+            
+            if (!confirm(`Are you sure you want to delete the sales record? "${sale.name} x${sale.quantity}" This action cannot be undone.`)) {
+                return;
+            }
+            
+            try {
+                // 删除销售记录
+                const deleteResponse = await fetch(`${API_BASE}/sales/${sale.id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (deleteResponse.ok) {
+                    // 恢复产品库存
+                    const updateResponse = await fetch(`${API_BASE}/products/update-quantity`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            barcode: sale.barcode,
+                            quantity_change: sale.quantity
+                        })
+                    });
+                    
+                    if (updateResponse.ok) {
+                        await loadProducts(); // 重新加载产品数据
+                        await loadSales(); // 重新加载销售数据
+                        showNotification("Sales record deleted successfully!");
+                    } else {
+                        showNotification("Failed to restore stock, but the sales record has been deleted", "warning");
+                    }
+                } else {
+                    const errorData = await deleteResponse.json();
+                    showNotification("Failed to delete: " + (errorData.error || "Unknown error"), "error");
+                }
+            } catch (error) {
+                console.error('Error deleting sales record:', error);
+                showNotification("Failed to delete, please check your network connection", "error");
+            }
+        }
+    </script>
+</body>
+</html>
